@@ -787,26 +787,24 @@ def load_data() -> pd.DataFrame:
 @st.cache_resource(show_spinner="🧠 Building similarity index…")
 def build_tfidf(df: pd.DataFrame) -> tuple:
     """Build TF-IDF vectorizer and sparse matrix — handle NaN values properly."""
-    # Create a clean copy for TF-IDF
-    tfidf_df = df[["articleType", "baseColour", "usage"]].copy()
+    # Handle each column separately and explicitly
+    article_type = df["articleType"].fillna("Unknown").astype(str)
+    base_colour = df["baseColour"].fillna("Unknown").astype(str)
+    usage = df["usage"].fillna("Casual").astype(str)
     
-    # Fill NaN values with default strings
-    tfidf_df["articleType"] = tfidf_df["articleType"].fillna("Unknown")
-    tfidf_df["baseColour"] = tfidf_df["baseColour"].fillna("Unknown")
-    tfidf_df["usage"] = tfidf_df["usage"].fillna("Casual")
+    # Combine and ensure no NaN values remain
+    texts = article_type + " " + base_colour + " " + usage
     
-    # Convert all to string explicitly and remove any NaN that slipped through
-    texts = (
-        tfidf_df["articleType"].astype(str) + " " + 
-        tfidf_df["baseColour"].astype(str) + " " + 
-        tfidf_df["usage"].astype(str)
-    )
-    
-    # Remove any remaining NaN or 'nan' strings
-    texts = texts.fillna("Unknown").replace("nan", "Unknown")
+    # Convert to list, replace 'nan' strings and empty values
+    texts_list = []
+    for text in texts:
+        if pd.isna(text) or text == "nan" or text.strip() == "":
+            texts_list.append("Unknown")
+        else:
+            texts_list.append(str(text).replace("nan", "Unknown"))
     
     tfidf = TfidfVectorizer(stop_words="english", max_features=1000)
-    matrix = tfidf.fit_transform(texts)
+    matrix = tfidf.fit_transform(texts_list)
     return (tfidf, matrix)
 
 
