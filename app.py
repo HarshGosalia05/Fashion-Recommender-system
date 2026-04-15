@@ -760,18 +760,51 @@ st.markdown(
 # ══════════════════════════════════════════════════════════════
 @st.cache_data(show_spinner="📦 Loading fashion dataset…")
 def load_data() -> pd.DataFrame:
-    """Load and clean styles.csv — identical to notebook."""
+    """Load and clean styles.csv — ensure all required columns exist."""
     df = pd.read_csv("styles.csv", on_bad_lines="skip")
-    df = df.dropna(subset=["usage", "baseColour", "season", "productDisplayName"])
+    
+    # Ensure required columns exist; fill missing ones
+    required_cols = ["id", "gender", "articleType", "baseColour", "usage", "season", "productDisplayName"]
+    for col in required_cols:
+        if col not in df.columns:
+            if col == "usage":
+                df[col] = "Casual"
+            elif col == "season":
+                df[col] = "All Seasons"
+            else:
+                df[col] = "Unknown"
+    
+    # Clean data
+    df = df.dropna(subset=["gender", "articleType", "baseColour", "productDisplayName"])
     df["year"] = df["year"].fillna(0).astype(int)
+    df["productDisplayName"] = df["productDisplayName"].str.strip()
+    df["articleType"] = df["articleType"].str.strip()
+    df["baseColour"] = df["baseColour"].str.strip()
     df = df.reset_index(drop=True)
     return df
 
 
 @st.cache_resource(show_spinner="🧠 Building similarity index…")
 def build_tfidf(df: pd.DataFrame) -> tuple:
-    """Build TF-IDF vectorizer and sparse matrix — compute similarities on-demand."""
-    texts = df["articleType"] + " " + df["baseColour"] + " " + df["usage"]
+    """Build TF-IDF vectorizer and sparse matrix — handle NaN values properly."""
+    # Create a clean copy for TF-IDF
+    tfidf_df = df[["articleType", "baseColour", "usage"]].copy()
+    
+    # Fill NaN values with default strings
+    tfidf_df["articleType"] = tfidf_df["articleType"].fillna("Unknown")
+    tfidf_df["baseColour"] = tfidf_df["baseColour"].fillna("Unknown")
+    tfidf_df["usage"] = tfidf_df["usage"].fillna("Casual")
+    
+    # Convert all to string explicitly and remove any NaN that slipped through
+    texts = (
+        tfidf_df["articleType"].astype(str) + " " + 
+        tfidf_df["baseColour"].astype(str) + " " + 
+        tfidf_df["usage"].astype(str)
+    )
+    
+    # Remove any remaining NaN or 'nan' strings
+    texts = texts.fillna("Unknown").replace("nan", "Unknown")
+    
     tfidf = TfidfVectorizer(stop_words="english", max_features=1000)
     matrix = tfidf.fit_transform(texts)
     return (tfidf, matrix)
